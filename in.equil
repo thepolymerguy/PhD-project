@@ -1,8 +1,8 @@
 #
-##############################################
-# Equilibration of homogenous polymer system #
-##############################################
-
+######################################################
+# Equilibration of homogenous polymer-solvent system #
+######################################################
+#
 shell               g++ var.cpp -o var.out
 shell               ./var.out
 shell               rm var.out

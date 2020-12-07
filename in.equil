@@ -1,0 +1,114 @@
+#
+##############################################
+# Equilibration of homogenous polymer system #
+##############################################
+
+shell               g++ var.cpp -o var.out
+shell               ./var.out
+shell               rm var.out
+include             paras.txt
+include             var.txt
+
+##################################################################
+#                   Initialisation                               #
+##################################################################
+
+dimension           3
+boundary            p p p
+units               lj             #reduced lj units, rc = 1
+atom_style          angle
+
+neighbor            2 bin
+neigh_modify        every 1 delay 0 check yes
+
+###################################################################
+#                     Box  Definitions                            #
+###################################################################
+
+region              box block ${Llo} ${Lhi} ${Llo} ${Lhi} ${Llo} ${Lhi}
+region              domain block ${Llo} ${Lhi} ${Llo} ${Lhi} ${Llo} ${Lhi}
+create_box          2 box bond/types 1 extra/bond/per/atom 1 extra/special/per/atom 2
+
+#####################.##############################################
+#                   Bond Bead molecule                            #
+###################################################################
+
+molecule            twobead    polyconfig.txt
+comm_modify         vel yes
+
+mass                1 ${MP}
+mass                2 ${MS}
+
+bond_style          harmonic
+bond_coeff          1 ${kx} ${l}
+
+special_bonds       lj 1.0 1.0 1.0 coul 1.0 1.0 1.0
+
+###################################################################
+#                   Solvent Bead Creation                         #
+###################################################################
+
+create_atoms        2 random ${Sn} ${RS1} box
+group               solvent type 2
+
+###################################################################
+#                   Bonded Bead Creation                          #
+###################################################################
+
+create_atoms        0 random ${Bn} ${RS4} domain mol twobead ${RS5}
+group               polymer molecule 1:${Bn}
+
+###################################################################
+#                Interatomic Potentials                           #
+###################################################################
+
+pair_style          dpd ${T} 1 ${RS2}
+
+pair_coeff          1 1 ${aaa} 4.5 1
+pair_coeff          1 2 ${asp} 4.5 1
+pair_coeff          2 2 ${app} 4.5 1
+
+###################################################################
+#                 Minimisation of system                          #
+###################################################################
+
+thermo_style        custom step temp pe ke etotal press
+thermo              100
+min_style           cg
+minimize            1.0e-8 0 5000 50000
+reset_timestep      0
+
+##################################################################
+#                    NVT Equilibration                           #
+##################################################################
+
+variable            dt equal 0.04
+
+timestep            ${dt}
+velocity            all create 1 ${RS3}
+
+fix                 2 all nvt temp 1 1 $(100*dt)
+
+compute             eqt all temp
+variable            t  equal step
+variable            eqtemp equal c_eqt
+fix                 et all ave/time 5 200 1000 v_eqtemp file av_eq_temp.txt
+
+compute             eqp all pressure eqt
+variable            ep equal c_eqp
+fix                 epress all ave/time 5 200 1000 v_ep file av_eq_press.txt
+
+compute             k all ke/atom
+compute             p all pe/atom
+
+dump                eq all custom 5000 eq.lammpstrj mol id type x y z vx vy vz c_k c_p xu yu zu fx fy fz
+dump_modify         eq sort id
+
+dump                5 all image 100000 dump_eq_image_*.jpg type type zoom 1 size 1080 1080
+dump_modify         5 pad 5 adiam * 0.2 bdiam * 0.01
+
+thermo_style        custom step temp press etotal pxy pxz pyz
+thermo              1000
+
+restart             50000 static_res_*.eq
+run                 250000
